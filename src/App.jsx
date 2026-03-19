@@ -70,8 +70,8 @@ body{font-family:'DM Sans',sans-serif;background:${COLORS.bg};color:${COLORS.tex
 /* ═══════════════════════════════════════════
    SHARED COMPONENTS
    ═══════════════════════════════════════════ */
-const Card = ({ children, style, className = "" }) => (
-  <div className={className} style={{
+const Card = ({ children, style, className = "", ...rest }) => (
+  <div className={className} {...rest} style={{
     background: COLORS.card, borderRadius: 16, padding: 24,
     boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)",
     border: `1px solid ${COLORS.borderLight}`, ...style
@@ -200,10 +200,11 @@ function Landing({ onStart }) {
    ═══════════════════════════════════════════ */
 function CountrySetup({ onSelect }) {
   const [currency, setCurrency] = useState("usd");
+  const [hoveredCard, setHoveredCard] = useState(null);
 
   const countries = [
-    { id: "uae", label: "UAE", company: "GulfFresh Distribution", city: "Dubai", flag: "\uD83C\uDDE6\uD83C\uDDEA", desc: "FMCG distributor serving UAE retailers. Seasonality includes Ramadan, Eid, and summer peaks." },
-    { id: "india", label: "India", company: "FreshBasket Distribution", city: "Mumbai", flag: "\uD83C\uDDEE\uD83C\uDDF3", desc: "FMCG distributor serving Indian retailers. Seasonality includes Diwali, Holi, monsoon, and wedding season." },
+    { id: "uae", label: "UAE", company: "GulfFresh Distribution", city: "Dubai", flagColors: ["#00732F", "#FFFFFF", "#000000", "#FF0000"], desc: "FMCG distributor serving UAE retailers. Seasonality includes Ramadan, Eid, and summer peaks." },
+    { id: "india", label: "India", company: "FreshBasket Distribution", city: "Mumbai", flagColors: ["#FF9933", "#FFFFFF", "#138808"], desc: "FMCG distributor serving Indian retailers. Seasonality includes Diwali, Holi, monsoon, and wedding season." },
   ];
 
   return (
@@ -221,18 +222,51 @@ function CountrySetup({ onSelect }) {
         </div>
 
         <div style={{ display: "flex", gap: 16, marginBottom: 24 }}>
-          {countries.map(c => (
-            <Card key={c.id} className="fade-up d1" style={{ flex: 1, cursor: "pointer", border: `2px solid ${COLORS.border}`, transition: "all .2s" }}
-              onClick={() => onSelect(c.id, currency)}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>{c.flag}</div>
-              <h3 style={{ fontFamily: "'Plus Jakarta Sans'", fontSize: 18, fontWeight: 700, color: COLORS.navy, marginBottom: 4 }}>{c.company}</h3>
-              <div style={{ fontSize: 13, color: COLORS.primary, fontWeight: 600, marginBottom: 12 }}>{c.city}, {c.label}</div>
-              <p style={{ fontSize: 13, color: COLORS.textMuted, lineHeight: 1.5 }}>{c.desc}</p>
-              <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 6, color: COLORS.primary, fontSize: 13, fontWeight: 700 }}>
-                Launch demo <ArrowRight size={14} />
+          {countries.map(c => {
+            const isHovered = hoveredCard === c.id;
+            return (
+              <div key={c.id} className="fade-up d1"
+                onClick={() => onSelect(c.id, currency)}
+                onMouseEnter={() => setHoveredCard(c.id)}
+                onMouseLeave={() => setHoveredCard(null)}
+                style={{
+                  flex: 1, cursor: "pointer", padding: 24, borderRadius: 16,
+                  background: COLORS.card,
+                  border: `2px solid ${isHovered ? COLORS.primary : COLORS.border}`,
+                  boxShadow: isHovered ? `0 8px 24px ${COLORS.primary}20` : "0 1px 3px rgba(0,0,0,0.04)",
+                  transition: "all .25s ease",
+                  transform: isHovered ? "translateY(-4px)" : "none",
+                }}>
+                {/* Flag bar */}
+                <div style={{ display: "flex", height: 28, borderRadius: 6, overflow: "hidden", marginBottom: 16, width: 48 }}>
+                  {c.id === "uae" ? (
+                    <>
+                      <div style={{ width: 12, background: "#FF0000" }} />
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+                        <div style={{ flex: 1, background: "#00732F" }} />
+                        <div style={{ flex: 1, background: "#FFFFFF" }} />
+                        <div style={{ flex: 1, background: "#000000" }} />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column", width: "100%" }}>
+                        <div style={{ flex: 1, background: "#FF9933" }} />
+                        <div style={{ flex: 1, background: "#FFFFFF" }} />
+                        <div style={{ flex: 1, background: "#138808" }} />
+                      </div>
+                    </>
+                  )}
+                </div>
+                <h3 style={{ fontFamily: "'Plus Jakarta Sans'", fontSize: 18, fontWeight: 700, color: COLORS.navy, marginBottom: 4 }}>{c.company}</h3>
+                <div style={{ fontSize: 13, color: COLORS.primary, fontWeight: 600, marginBottom: 12 }}>{c.city}, {c.label}</div>
+                <p style={{ fontSize: 13, color: COLORS.textMuted, lineHeight: 1.5 }}>{c.desc}</p>
+                <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 6, color: COLORS.primary, fontSize: 13, fontWeight: 700 }}>
+                  Launch demo <ArrowRight size={14} />
+                </div>
               </div>
-            </Card>
-          ))}
+            );
+          })}
         </div>
 
         <Card className="fade-up d2" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
