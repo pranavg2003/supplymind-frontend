@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { fetchDemoData } from "./api";
+import { fetchDemoData, uploadFile, wakeServer } from "./api";
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, RadarChart,
@@ -8,7 +8,8 @@ import {
 import {
   TrendingUp, AlertTriangle, Package, BarChart2, Brain, Layers, Activity,
   ArrowRight, CheckCircle, Zap, Shield, Globe, ChevronDown, RefreshCw,
-  AlertCircle, Clock, DollarSign, Box, Search, Download, ExternalLink
+  AlertCircle, Clock, DollarSign, Box, Search, Download, ExternalLink,
+  Upload, FileUp
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════
@@ -118,7 +119,7 @@ const fmtNum = (n) => n != null ? Number(n).toLocaleString("en", { maximumFracti
 /* ═══════════════════════════════════════════
    LANDING PAGE
    ═══════════════════════════════════════════ */
-function Landing({ onStart }) {
+function Landing({ onStart, onUpload }) {
   return (
     <div style={{ minHeight: "100vh", background: COLORS.white }}>
       {/* Nav */}
@@ -129,9 +130,14 @@ function Landing({ onStart }) {
           </div>
           <span style={{ fontFamily: "'Plus Jakarta Sans'", fontSize: 20, fontWeight: 800, color: COLORS.navy }}>SupplyMind</span>
         </div>
-        <button onClick={onStart} style={{ padding: "10px 24px", borderRadius: 10, border: "none", background: COLORS.primary, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-          Try Demo Data
-        </button>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={onUpload} style={{ padding: "10px 24px", borderRadius: 10, border: `2px solid ${COLORS.primary}`, background: "transparent", color: COLORS.primary, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+            Upload Data
+          </button>
+          <button onClick={onStart} style={{ padding: "10px 24px", borderRadius: 10, border: "none", background: COLORS.primary, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+            Try Demo
+          </button>
+        </div>
       </nav>
 
       {/* Hero */}
@@ -147,7 +153,10 @@ function Landing({ onStart }) {
           Upload your sales history and get demand forecasts, safety stock calculations, reorder alerts, and inventory optimization recommendations powered by real ML algorithms.
         </p>
         <div style={{ display: "flex", gap: 14, justifyContent: "center" }}>
-          <button onClick={onStart} style={{ display: "flex", alignItems: "center", gap: 8, padding: "14px 32px", borderRadius: 12, border: "none", background: COLORS.primary, color: "#fff", fontSize: 16, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 14px rgba(232,68,58,.3)" }}>
+          <button onClick={onUpload} style={{ display: "flex", alignItems: "center", gap: 8, padding: "14px 32px", borderRadius: 12, border: "none", background: COLORS.primary, color: "#fff", fontSize: 16, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 14px rgba(232,68,58,.3)" }}>
+            <Upload size={18} /> Upload Your Data
+          </button>
+          <button onClick={onStart} style={{ display: "flex", alignItems: "center", gap: 8, padding: "14px 32px", borderRadius: 12, border: `2px solid ${COLORS.border}`, background: "transparent", color: COLORS.navy, fontSize: 16, fontWeight: 700, cursor: "pointer" }}>
             Try Demo Data <ArrowRight size={18} />
           </button>
         </div>
@@ -174,8 +183,8 @@ function Landing({ onStart }) {
         <h2 style={{ fontFamily: "'Plus Jakarta Sans'", fontSize: 28, fontWeight: 800, textAlign: "center", marginBottom: 40, color: COLORS.navy }}>How it works</h2>
         <div style={{ display: "flex", gap: 32, flexWrap: "wrap", justifyContent: "center" }}>
           {[
-            { step: "01", title: "Select your market", desc: "Choose UAE or India. The system adjusts holidays, seasonality patterns, and currency automatically." },
-            { step: "02", title: "Run ML analysis", desc: "Five algorithms analyze your sales patterns. The best-performing model is auto-selected for each SKU." },
+            { step: "01", title: "Upload or try demo", desc: "Upload your own CSV/XLSX sales data, or try the demo with GulfFresh (UAE) or FreshBasket (India) sample data." },
+            { step: "02", title: "ML analyzes patterns", desc: "Five algorithms analyze your sales patterns. The best-performing model is auto-selected for each SKU." },
             { step: "03", title: "Get actionable insights", desc: "Interactive dashboard with forecasts, risk alerts, optimization recommendations, and exportable reports." },
           ].map((s, i) => (
             <div key={i} style={{ flex: "1 1 200px", textAlign: "center" }}>
@@ -288,11 +297,193 @@ function CountrySetup({ onSelect }) {
 }
 
 /* ═══════════════════════════════════════════
+   UPLOAD PAGE
+   ═══════════════════════════════════════════ */
+function UploadPage({ onSubmit, onBack }) {
+  const [file, setFile] = useState(null);
+  const [dragging, setDragging] = useState(false);
+  const [country, setCountry] = useState("UAE");
+  const [horizon, setHorizon] = useState(12);
+  const [currency, setCurrency] = useState("USD");
+  const [error, setError] = useState(null);
+
+  const accept = ".csv,.xlsx,.xls";
+  const maxSize = 10 * 1024 * 1024;
+
+  const handleFile = (f) => {
+    setError(null);
+    if (!f) return;
+    const ext = f.name.split(".").pop().toLowerCase();
+    if (!["csv", "xlsx", "xls"].includes(ext)) { setError("Please upload a CSV or Excel (.xlsx) file."); return; }
+    if (f.size > maxSize) { setError("File too large. Maximum size is 10MB."); return; }
+    setFile(f);
+  };
+
+  const onDrop = (e) => { e.preventDefault(); setDragging(false); handleFile(e.dataTransfer.files[0]); };
+  const onDragOver = (e) => { e.preventDefault(); setDragging(true); };
+  const onDragLeave = () => setDragging(false);
+
+  return (
+    <div style={{ minHeight: "100vh", background: COLORS.bg }}>
+      {/* Top bar */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 40px", background: COLORS.white, borderBottom: `1px solid ${COLORS.border}` }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 30, height: 30, borderRadius: 8, background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.primaryDark})`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Brain size={16} color="#fff" strokeWidth={2.5} />
+          </div>
+          <span style={{ fontFamily: "'Plus Jakarta Sans'", fontSize: 17, fontWeight: 800, color: COLORS.navy }}>SupplyMind</span>
+        </div>
+        <button onClick={onBack} style={{ padding: "8px 18px", borderRadius: 8, border: `1px solid ${COLORS.border}`, background: "transparent", color: COLORS.textMuted, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          Back to Home
+        </button>
+      </div>
+
+      <div style={{ maxWidth: 680, margin: "0 auto", padding: "48px 24px" }}>
+        <div className="fade-up" style={{ textAlign: "center", marginBottom: 32 }}>
+          <h2 style={{ fontFamily: "'Plus Jakarta Sans'", fontSize: 28, fontWeight: 800, color: COLORS.navy, marginBottom: 8 }}>Upload your sales data</h2>
+          <p style={{ fontSize: 15, color: COLORS.textMuted, lineHeight: 1.6 }}>
+            Upload a CSV or Excel file with your sales history. Required columns: <strong>date</strong>, <strong>sku/product_id</strong>, <strong>quantity</strong>. Optional: price, category.
+          </p>
+        </div>
+
+        {/* Drop Zone */}
+        <div className="fade-up d1"
+          onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave}
+          style={{
+            background: dragging ? COLORS.primaryLight : COLORS.white,
+            border: `2px dashed ${dragging ? COLORS.primary : file ? COLORS.green : COLORS.border}`,
+            borderRadius: 16, padding: "48px 24px", textAlign: "center", cursor: "pointer",
+            transition: "all .2s", marginBottom: 24,
+          }}
+          onClick={() => document.getElementById("fileInput").click()}>
+          <input id="fileInput" type="file" accept={accept} style={{ display: "none" }}
+            onChange={(e) => handleFile(e.target.files[0])} />
+          
+          {file ? (
+            <div>
+              <CheckCircle size={36} color={COLORS.green} style={{ marginBottom: 12 }} />
+              <div style={{ fontFamily: "'Plus Jakarta Sans'", fontSize: 16, fontWeight: 700, color: COLORS.text, marginBottom: 4 }}>{file.name}</div>
+              <div style={{ fontSize: 13, color: COLORS.textMuted }}>{(file.size / 1024).toFixed(1)} KB &middot; Click to change file</div>
+            </div>
+          ) : (
+            <div>
+              <FileUp size={36} color={dragging ? COLORS.primary : COLORS.textMuted} style={{ marginBottom: 12 }} />
+              <div style={{ fontFamily: "'Plus Jakarta Sans'", fontSize: 16, fontWeight: 700, color: COLORS.text, marginBottom: 4 }}>Drag and drop your file here</div>
+              <div style={{ fontSize: 13, color: COLORS.textMuted }}>or click to browse &middot; CSV, XLSX up to 10MB</div>
+            </div>
+          )}
+        </div>
+
+        {error && (
+          <div className="fade-in" style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "12px 16px", marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
+            <AlertCircle size={16} color={COLORS.red} />
+            <span style={{ fontSize: 13, color: "#991B1B" }}>{error}</span>
+          </div>
+        )}
+
+        {/* Configuration */}
+        <Card className="fade-up d2" style={{ marginBottom: 24 }}>
+          <h3 style={{ fontFamily: "'Plus Jakarta Sans'", fontSize: 15, fontWeight: 700, color: COLORS.text, marginBottom: 16 }}>Analysis settings</h3>
+          
+          <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+            {/* Country */}
+            <div style={{ flex: "1 1 160px" }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: COLORS.textMuted, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".5px" }}>Market</label>
+              <div style={{ display: "flex", gap: 6 }}>
+                {[["UAE", "UAE"], ["India", "India"]].map(([val, label]) => (
+                  <button key={val} onClick={() => setCountry(val)} style={{
+                    flex: 1, padding: "8px 14px", borderRadius: 8,
+                    border: `1px solid ${country === val ? COLORS.primary : COLORS.border}`,
+                    background: country === val ? COLORS.primaryLight : "transparent",
+                    color: country === val ? COLORS.primary : COLORS.textMuted,
+                    fontSize: 13, fontWeight: 600, cursor: "pointer"
+                  }}>{label}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Horizon */}
+            <div style={{ flex: "1 1 160px" }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: COLORS.textMuted, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".5px" }}>Forecast horizon</label>
+              <select value={horizon} onChange={e => setHorizon(Number(e.target.value))}
+                style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 13, color: COLORS.text, background: COLORS.white, outline: "none" }}>
+                {[4, 8, 12, 24, 52].map(h => <option key={h} value={h}>{h} weeks</option>)}
+              </select>
+            </div>
+
+            {/* Currency */}
+            <div style={{ flex: "1 1 160px" }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: COLORS.textMuted, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".5px" }}>Currency</label>
+              <div style={{ display: "flex", gap: 6 }}>
+                {[["USD", "$"], ["AED", "AED"], ["INR", "Rs."]].map(([val, label]) => (
+                  <button key={val} onClick={() => setCurrency(val)} style={{
+                    flex: 1, padding: "8px 10px", borderRadius: 8,
+                    border: `1px solid ${currency === val ? COLORS.primary : COLORS.border}`,
+                    background: currency === val ? COLORS.primaryLight : "transparent",
+                    color: currency === val ? COLORS.primary : COLORS.textMuted,
+                    fontSize: 13, fontWeight: 600, cursor: "pointer"
+                  }}>{label}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* Data Format Help */}
+        <Card className="fade-up d3" style={{ marginBottom: 24, background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+          <h4 style={{ fontSize: 13, fontWeight: 700, color: COLORS.text, marginBottom: 10 }}>Expected data format</h4>
+          <div style={{ fontSize: 12, color: COLORS.textMuted, lineHeight: 1.8, fontFamily: "monospace" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4, background: COLORS.white, borderRadius: 8, padding: 10, border: `1px solid ${COLORS.border}` }}>
+              <span style={{ fontWeight: 700, color: COLORS.text }}>date</span>
+              <span style={{ fontWeight: 700, color: COLORS.text }}>sku</span>
+              <span style={{ fontWeight: 700, color: COLORS.text }}>quantity</span>
+              <span style={{ fontWeight: 700, color: COLORS.textMuted }}>price</span>
+              <span style={{ fontWeight: 700, color: COLORS.textMuted }}>category</span>
+              <span>2024-01-01</span><span>SKU-001</span><span>150</span><span>22.99</span><span>Beverages</span>
+              <span>2024-01-01</span><span>SKU-002</span><span>340</span><span>1.79</span><span>Dairy</span>
+              <span>2024-01-02</span><span>SKU-001</span><span>180</span><span>22.99</span><span>Beverages</span>
+            </div>
+            <div style={{ marginTop: 8, fontSize: 11 }}>
+              <strong style={{ color: COLORS.text }}>Required:</strong> date, sku/product_id, quantity &middot; <strong style={{ color: COLORS.textMuted }}>Optional:</strong> price, category
+            </div>
+          </div>
+        </Card>
+
+        {/* Submit */}
+        <button className="fade-up d4" disabled={!file}
+          onClick={() => file && onSubmit(file, country, horizon, currency)}
+          style={{
+            width: "100%", padding: "16px", borderRadius: 12, border: "none",
+            background: file ? COLORS.primary : COLORS.border,
+            color: file ? "#fff" : COLORS.textMuted,
+            fontSize: 16, fontWeight: 700, cursor: file ? "pointer" : "not-allowed",
+            fontFamily: "'Plus Jakarta Sans'",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+            boxShadow: file ? "0 4px 14px rgba(232,68,58,.3)" : "none",
+            transition: "all .2s",
+          }}>
+          <Brain size={18} /> Run ML Analysis
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
    LOADING SCREEN (Cold Start Aware)
    ═══════════════════════════════════════════ */
-function LoadingScreen({ country, elapsed }) {
-  const company = country === "uae" ? "GulfFresh Distribution" : "FreshBasket Distribution";
-  const steps = [
+function LoadingScreen({ country, elapsed, isUpload }) {
+  const company = country === "uae" ? "GulfFresh Distribution" : country === "india" ? "FreshBasket Distribution" : "your data";
+  const steps = isUpload ? [
+    { label: "Uploading file to ML engine", done: elapsed > 2 },
+    { label: "Validating data format and columns", done: elapsed > 5 },
+    { label: "Running SMA baseline forecasts", done: elapsed > 10 },
+    { label: "Training SARIMA seasonal models", done: elapsed > 20 },
+    { label: "Training LightGBM gradient boosting", done: elapsed > 35 },
+    { label: "Computing SHAP feature importance", done: elapsed > 50 },
+    { label: "Calculating safety stock and reorder points", done: elapsed > 60 },
+    { label: "Generating risk alerts and recommendations", done: elapsed > 70 },
+  ] : [
     { label: "Connecting to ML engine", done: elapsed > 2 },
     { label: "Generating sales history (25 SKUs, 52 weeks)", done: elapsed > 5 },
     { label: "Running SMA baseline forecasts", done: elapsed > 8 },
@@ -313,9 +504,9 @@ function LoadingScreen({ country, elapsed }) {
           Analyzing {company}
         </h2>
         <p style={{ fontSize: 14, color: COLORS.textMuted, marginBottom: 8 }}>
-          Running ML models on demo data. This typically takes 15-30 seconds.
+          {isUpload ? "Processing your file through the ML pipeline. This may take 60-90 seconds." : "Running ML models on demo data. This typically takes 15-30 seconds."}
         </p>
-        {elapsed > 15 && (
+        {elapsed > (isUpload ? 30 : 15) && (
           <p style={{ fontSize: 13, color: COLORS.amber, fontWeight: 500, marginBottom: 8, animation: "fadeIn .3s ease" }}>
             The server is waking up from sleep mode (free tier). Hang tight, this is a one-time wait.
           </p>
@@ -910,17 +1101,21 @@ export default function App() {
   const [error, setError] = useState(null);
   const [elapsed, setElapsed] = useState(0);
   const [isFallback, setIsFallback] = useState(false);
+  const [isUpload, setIsUpload] = useState(false);
+
+  // Wake server on page load (so cold start happens while user reads landing page)
+  useEffect(() => { wakeServer(); }, []);
 
   // Fetch demo data from live API (with fallback to local demo)
   const fetchDemo = useCallback(async (selectedCountry, selectedCurrency) => {
     setCountry(selectedCountry);
     setCurrency(selectedCurrency);
+    setIsUpload(false);
     setPage("loading");
     setElapsed(0);
     setError(null);
     setIsFallback(false);
 
-    // Start elapsed timer
     const timer = setInterval(() => setElapsed(prev => prev + 1), 1000);
 
     try {
@@ -936,6 +1131,31 @@ export default function App() {
     }
   }, []);
 
+  // Handle file upload -> send to /api/analyze
+  const handleUpload = useCallback(async (file, selectedCountry, horizon, selectedCurrency) => {
+    setCountry(selectedCountry.toLowerCase());
+    setCurrency(selectedCurrency.toLowerCase());
+    setIsUpload(true);
+    setPage("loading");
+    setElapsed(0);
+    setError(null);
+    setIsFallback(false);
+
+    const timer = setInterval(() => setElapsed(prev => prev + 1), 1000);
+
+    try {
+      const result = await uploadFile(file, selectedCountry, horizon, selectedCurrency);
+      clearInterval(timer);
+      setData(result);
+      setPage("dashboard");
+    } catch (err) {
+      clearInterval(timer);
+      console.error("Upload Error:", err);
+      setError(err.message);
+      // Show error on loading page, don't navigate away
+    }
+  }, []);
+
   const handleReset = () => {
     setPage("landing");
     setData(null);
@@ -943,23 +1163,28 @@ export default function App() {
     setError(null);
     setElapsed(0);
     setIsFallback(false);
+    setIsUpload(false);
   };
 
   return (
     <>
       <style>{css}</style>
-      {page === "landing" && <Landing onStart={() => setPage("setup")} />}
+      {page === "landing" && <Landing onStart={() => setPage("setup")} onUpload={() => setPage("upload")} />}
       {page === "setup" && <CountrySetup onSelect={fetchDemo} />}
+      {page === "upload" && <UploadPage onSubmit={handleUpload} onBack={() => setPage("landing")} />}
       {page === "loading" && (
         <div>
-          <LoadingScreen country={country} elapsed={elapsed} />
+          <LoadingScreen country={country} elapsed={elapsed} isUpload={isUpload} />
           {error && (
-            <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 12, padding: "14px 24px", maxWidth: 500, boxShadow: "0 4px 20px rgba(0,0,0,.1)" }}>
+            <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 12, padding: "14px 24px", maxWidth: 540, boxShadow: "0 4px 20px rgba(0,0,0,.1)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <AlertCircle size={18} color={COLORS.red} />
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#991B1B" }}>Connection issue</div>
-                  <div style={{ fontSize: 12, color: "#B91C1C", marginTop: 2 }}>The server may be starting up. Retrying automatically...</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#991B1B" }}>{isUpload ? "Upload failed" : "Connection issue"}</div>
+                  <div style={{ fontSize: 12, color: "#B91C1C", marginTop: 2 }}>{error}</div>
+                  <button onClick={handleReset} style={{ marginTop: 8, padding: "6px 14px", borderRadius: 6, border: `1px solid ${COLORS.border}`, background: COLORS.white, color: COLORS.text, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                    Go back
+                  </button>
                 </div>
               </div>
             </div>
