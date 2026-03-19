@@ -1,5 +1,36 @@
 const API_BASE = "https://supplymind-backend.onrender.com";
 
+/** Wake the server from cold sleep (call on page load) */
+export async function wakeServer() {
+  try { await fetch(`${API_BASE}/api/health`, { signal: AbortSignal.timeout(5000) }); } catch (e) { /* ignore */ }
+}
+
+/** Upload a CSV/XLSX file for ML analysis */
+export async function uploadFile(file, country = "UAE", horizon = 12, currency = "USD") {
+  const formData = new FormData();
+  formData.append("file", file);
+  const url = `${API_BASE}/api/analyze?country=${country}&horizon=${horizon}&currency=${currency}`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 180000); // 3 min for ML processing
+
+  try {
+    const response = await fetch(url, { method: "POST", body: formData, signal: controller.signal });
+    clearTimeout(timeout);
+    if (!response.ok) {
+      const errText = await response.text().catch(() => "Unknown error");
+      let msg = `Server returned ${response.status}`;
+      try { const j = JSON.parse(errText); msg = j.detail || msg; } catch (e) { msg = errText || msg; }
+      throw new Error(msg);
+    }
+    const raw = await response.json();
+    return normalizeResponse(raw);
+  } catch (err) {
+    clearTimeout(timeout);
+    throw err;
+  }
+}
+
 export async function fetchDemoData(country, horizon = 12) {
   const url = `${API_BASE}/api/demo/${country}?horizon=${horizon}`;
   for (let attempt = 1; attempt <= 3; attempt++) {
